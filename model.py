@@ -76,8 +76,12 @@ def train_model(x, y, valid, schema, epochs):
     pred, flags, _ = predict(model, x[test])
     y_test = y[test[test_ok]]
     baseline = np.broadcast_to(model['target_scaler'].mean_, y_test.shape)
+    trivial = np.zeros_like(y_test)
+    trivial[:, TARGETS['V']] = x[test[test_ok], :140:4]
     scores = {'counts': {'train': len(tr), 'validation': len(val), 'holdout': len(test),
                          'holdout_valid': int(test_ok.sum())},
               'threshold': float(cut), 'F1-macro': f1_score(valid[test], flags, average='macro'),
-              'regression': report(y_test, pred[test_ok]), 'mean_baseline': report(y_test, baseline)}
+              'regression': report(y_test, pred[test_ok]), 'mean_baseline': report(y_test, baseline),
+              'organizer_trivial_baseline': {'F1-macro': f1_score(valid[test], np.ones(len(test)), average='macro'),
+                                             'regression': report(y_test, trivial)}}
     return model, scores

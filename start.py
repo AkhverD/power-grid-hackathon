@@ -13,19 +13,13 @@ def main():
         return 1
 
     args = sys.argv[1:]
-    if not args:
-        missing = [name for name in ('train_nodes_34.csv', 'train_lines_34.csv')
-                   if not (ROOT / name).is_file()]
-        if missing:
-            print(f'Положите рядом со start.py файлы: {", ".join(missing)}', file=sys.stderr)
-            return 1
-
     exe = ENV / ('Scripts/python.exe' if os.name == 'nt' else 'bin/python')
     try:
         if not exe.is_file():
             subprocess.run([sys.executable, '-m', 'venv', str(ENV)], check=True)
 
-        probe = subprocess.run([exe, '-c', 'import numpy, pandas, sklearn, joblib, threadpoolctl'],
+        probe = subprocess.run([exe, '-c', 'import numpy, pandas, sklearn, joblib, threadpoolctl; '
+                                'assert sklearn.__version__ == "1.7.2" and int(numpy.__version__.split(".")[0]) == 2'],
                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         if probe.returncode:
             subprocess.run([exe, '-m', 'pip', 'install', '-r', ROOT / 'requirements.txt'], check=True)

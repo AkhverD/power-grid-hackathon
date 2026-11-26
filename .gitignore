@@ -1,5 +1,9 @@
 .venv/
 __pycache__/
 *.py[cod]
+dataset/
 results/*
 !results/check/
+results/check/contest/
+!results/metrics.json
+!results/model.joblib

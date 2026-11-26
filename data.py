@@ -11,9 +11,11 @@ ID = 'ID_опыта'
 NUM = 'Номер'
 VALID = 'Regime_valid'
 NODE_X = ['Uном', 'Pн', 'Qн', 'Pг']
-LINE_X = ['Ns', 'Ne', 'type', 'R', 'X', 'B', 'Kt', 'Iдоп']
+# В исходных данных I_доп отсутствует ровно у несошедшихся режимов.
+LINE_X = ['Ns', 'Ne', 'type', 'R', 'X', 'B', 'Kt']
 NODE_Y = ['V', 'Delta']
 LINE_Y = ['Imax', 'Izagr']
+LINE_OUT = ['Imax, A', 'Izarg, %']
 
 ALIASES = {
     ID: ['id', 'experiment_id', 'scenario_id', 'id_experiment'],
@@ -26,7 +28,6 @@ ALIASES = {
     'V': ['|V|', 'V, кВ'],
     'Delta': ['δ', 'Delta, град', 'Delta, °'],
     'Imax': ['Imax, A', 'Imax, А'],
-    'Iдоп': ['Iдоп, A', 'Iдоп, А', 'Idop', 'Idop, A'],
     'Izagr': ['Izarg', 'Izagr, %', 'Izarg, %', 'Iзагр', 'Iзагр, %'],
 }
 
@@ -81,7 +82,7 @@ def read_table(path, inputs, targets, train):
     if df.empty or df[ID].isna().any():
         raise ValueError(f'{path.name}: отсутствуют данные или ID режима')
     df[ID] = df[ID].astype('category')
-    return df.sort_values([ID, NUM], ignore_index=True)
+    return df.sort_values([ID, NUM], ignore_index=train)
 
 
 def pack(path, inputs, targets, size, train, kinds=None):
@@ -118,37 +119,42 @@ def pack(path, inputs, targets, size, train, kinds=None):
         if np.any(flags < 0) or np.any(flags != flags[:, :1]):
             raise ValueError(f'{Path(path).name}: проверьте флаг {VALID} у всех узлов режима')
         valid = flags[:, 0].copy()
-    return ids, nums[0].copy(), x.reshape(len(ids), -1), y, valid, kinds
+    order = None
+    if not train:
+        order = np.empty(len(df), dtype=np.intp)
+        order[df.index.to_numpy()] = np.arange(len(df), dtype=np.intp)
+    return ids, nums[0].copy(), x.reshape(len(ids), -1), y, valid, kinds, order
 
 
 def load_data(nodes, lines, train, schema=None):
-    ids, node_nums, nx, ny, valid, _ = pack(nodes, NODE_X, [*NODE_Y, VALID], 35, train)
-    line_ids, line_nums, lx, ly, _, kinds = pack(lines, LINE_X, LINE_Y, 80, train,
-                                                None if schema is None else schema['types'])
+    ids, node_nums, nx, ny, valid, _, node_order = pack(nodes, NODE_X, [*NODE_Y, VALID], 35, train)
+    line_ids, line_nums, lx, ly, _, kinds, line_order = pack(lines, LINE_X, LINE_Y, 80, train,
+                                                            None if schema is None else schema['types'])
     if not np.array_equal(ids, line_ids):
         raise ValueError('Списки ID режимов в файлах узлов и ветвей различаются')
     actual = {'nodes': node_nums.tolist(), 'lines': line_nums.tolist(), 'types': kinds}
     if schema is not None and actual != schema:
         raise ValueError('Номера узлов или ветвей отличаются от схемы обучения')
     y = np.concatenate([*ny, *ly], axis=1) if train else None
-    return ids, np.concatenate([nx, lx], axis=1), y, valid, actual
+    return ids, np.concatenate([nx, lx], axis=1), y, valid, actual, (node_order, line_order)
 
 
-def write_predictions(out, ids, schema, pred, flags, prob):
+def write_predictions(out, ids, schema, pred, flags, prob, orders, contest=False):
     out.mkdir(parents=True, exist_ok=True)
-    for name, nums, cols, vals in [
-        ('nodes', schema['nodes'], NODE_Y, (pred[:, :35], pred[:, 35:70])),
-        ('lines', schema['lines'], LINE_Y, (pred[:, 70:150], pred[:, 150:])),
+    for name, cols, vals, order in [
+        ('nodes', NODE_Y, (pred[:, :35], pred[:, 35:70]), orders[0]),
+        ('lines', LINE_OUT, (pred[:, 70:150], pred[:, 150:]), orders[1]),
     ]:
         path = out / f'pred_{name}.csv'
-        for start in range(0, len(ids), 2048):
-            part = slice(start, start + 2048)
-            count = len(nums)
-            frame = pd.DataFrame({ID: np.repeat(ids[part], count), NUM: np.tile(nums, len(ids[part]))})
+        nums = np.asarray(schema[name])
+        for start in range(0, len(order), 100_000):
+            exp, elem = np.divmod(order[start:start + 100_000], len(nums))
+            frame = pd.DataFrame({ID: ids[exp], NUM: nums[elem]})
             for col, val in zip(cols, vals):
-                frame[col] = val[part].ravel()
+                frame[col] = val[exp, elem]
             if name == 'nodes':
-                frame[VALID] = np.repeat(flags[part], count)
-            frame.to_csv(path, mode='a' if start else 'w', header=start == 0, index=False, encoding='utf-8-sig')
-    pd.DataFrame({ID: ids, VALID: flags, 'probability_valid': prob}).to_csv(
-        out / 'pred_regimes.csv', index=False, encoding='utf-8-sig')
+                frame[VALID] = flags[exp]
+            frame.to_csv(path, mode='a' if start else 'w', header=start == 0, index=False, encoding='utf-8')
+    if not contest:
+        pd.DataFrame({ID: ids, VALID: flags, 'probability_valid': prob}).to_csv(
+            out / 'pred_regimes.csv', index=False, encoding='utf-8')
