@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Прогноз установившегося режима электросети">
+  <title>Контур — прогноз режима электросети</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="demo.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="#overview" aria-label="Контур, к обзору">
+        <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M13 3 5 14h6l-1 7 9-11h-6l1-7Z"/></svg></span>
+        Контур<span class="brand-divider"></span><span class="brand-caption">Анализ электросети</span>
+      </a>
+      <nav aria-label="Разделы">
+        <a class="nav-link" href="#overview">Обзор</a>
+        <a class="nav-link" href="#results">Результаты</a>
+      </nav>
+      <button class="button button-primary" id="open-upload"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m-4 4 4-4 4 4M5 15v5h14v-5"/></svg>Загрузить CSV</button>
+    </div>
+  </header>
+  <main id="overview" class="workspace">
+    <section class="intro" aria-labelledby="page-title">
+      <div>
+        <div class="eyebrow"><span></span> УСТАНОВИВШИЙСЯ РЕЖИМ</div>
+        <h1 id="page-title">Прогноз электросети</h1>
+        <p>Напряжения в узлах, загрузка ветвей и оценка сходимости режима.</p>
+      </div>
+      <div class="scenario-control">
+        <label for="scenario">Сценарий</label>
+        <select id="scenario"></select>
+        <span id="data-source" class="source-pill">Демо-данные</span>
+      </div>
+    </section>
+
+    <div class="overview-grid">
+      <section class="network-panel" aria-labelledby="network-title">
+        <div class="network-header">
+          <div>
+            <h2 id="network-title">Схема сети</h2>
+            <p id="network-count">35 узлов · 80 ветвей</p>
+          </div>
+          <div class="map-actions" aria-label="Масштаб схемы">
+            <button id="zoom-out" title="Уменьшить масштаб" aria-label="Уменьшить масштаб">−</button>
+            <button id="zoom-reset" title="Сбросить масштаб" aria-label="Сбросить масштаб"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4H4v5m11-5h5v5M4 15v5h5m11-5v5h-5"/></svg></button>
+            <button id="zoom-in" title="Увеличить масштаб" aria-label="Увеличить масштаб">+</button>
+          </div>
+        </div>
+        <div class="map-stage">
+          <canvas id="network" role="img" aria-label="Схема связей между узлами. Все значения доступны в таблицах ниже."></canvas>
+          <div id="map-note" class="map-note" hidden></div>
+        </div>
+        <div class="network-footer">
+          <div class="legend" aria-label="Цвета номинального напряжения">
+            <span><i class="legend-dot v500"></i>500 кВ</span>
+            <span><i class="legend-dot v220"></i>220 кВ</span>
+            <span><i class="legend-dot v110"></i>110 кВ</span>
+          </div>
+          <span id="node-caption">Выберите узел на схеме</span>
+        </div>
+      </section>
+
+      <aside class="summary" aria-label="Показатели сценария">
+        <section class="status-card" id="status-card">
+          <div class="status-top"><span>Сходимость режима</span><span class="status-symbol" id="status-symbol" aria-hidden="true">✓</span></div>
+          <h2 id="status-title"></h2>
+          <div class="probability-row"><span>Вероятность сходимости</span><strong id="probability"></strong></div>
+          <div class="probability-track" aria-hidden="true"><div id="probability-fill"></div></div>
+        </section>
+        <section class="metrics-card" aria-labelledby="metrics-title">
+          <h2 id="metrics-title">Показатели режима</h2>
+          <dl>
+            <div><dt>Мин. напряжение</dt><dd id="min-voltage"></dd></div>
+            <div><dt>Макс. ток ветви</dt><dd id="max-current"></dd></div>
+            <div><dt>Пиковая загрузка</dt><dd id="max-load"></dd></div>
+          </dl>
+        </section>
+      </aside>
+    </div>
+
+    <section class="results" id="results" aria-labelledby="results-title">
+      <div class="results-heading">
+        <div><h2 id="results-title">Результаты прогноза</h2><p id="results-subtitle"></p></div>
+        <button id="download" class="button button-outline"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v12m-4-4 4 4 4-4M5 16v4h14v-4"/></svg><span>Скачать CSV</span></button>
+      </div>
+      <div class="table-panel">
+        <div class="table-toolbar">
+          <div class="view-switch" aria-label="Таблицы прогноза">
+            <button data-view="nodes" aria-pressed="true">Узлы <span>35</span></button>
+            <button data-view="lines" aria-pressed="false">Ветви <span>80</span></button>
+          </div>
+          <label class="search-box"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="5.5"/><path d="m15 15 4 4"/></svg><input id="search" type="search" placeholder="Поиск по номеру" aria-label="Поиск по номеру"></label>
+        </div>
+        <div class="table-scroll" tabindex="0" aria-label="Таблица результатов">
+          <table><thead id="table-head"></thead><tbody id="table-body"></tbody></table>
+        </div>
+        <div class="table-footer"><span id="row-count"></span><div class="pagination"><button id="prev" aria-label="Предыдущая страница">‹</button><span id="page-count"></span><button id="next" aria-label="Следующая страница">›</button></div></div>
+      </div>
+    </section>
+  </main>
+  <footer class="workspace site-footer"><span>Контур · анализ электросети</span><span>Прогноз по данным узлов и ветвей</span></footer>
+
+  <dialog id="upload-dialog" aria-labelledby="upload-title">
+    <form id="upload-form">
+      <div class="dialog-header"><h2 id="upload-title">Загрузка сценариев</h2><button class="icon-button" id="close-upload" type="button" aria-label="Закрыть">×</button></div>
+      <p>Добавьте два CSV с одинаковым набором ID опытов. Каждый режим должен содержать 35 узлов и 80 ветвей. Размер запроса — до 8 МиБ.</p>
+      <label class="file-picker">Параметры узлов<input type="file" name="nodes" accept=".csv,text/csv" required></label>
+      <label class="file-picker">Параметры ветвей<input type="file" name="lines" accept=".csv,text/csv" required></label>
+      <p id="upload-feedback" role="status" hidden></p>
+      <button class="button button-primary" id="submit-upload" type="submit">Выполнить прогноз</button>
+    </form>
+  </dialog>
+</body>
+</html>
